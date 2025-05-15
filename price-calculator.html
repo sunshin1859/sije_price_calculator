@@ -5,42 +5,76 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SIJE 구독료 계산기</title>
   <style>
-    body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; }
+    body {
+      font-family: sans-serif;
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 20px;
+      display: flex;
+      gap: 40px;
+      border: 1px solid #ccc;
+    }
+    .form-section {
+      flex: 1;
+    }
+    .result {
+      flex: 1;
+      background: #f9f9f9;
+      padding: 10px;
+      border: 1px solid #ddd;
+      height: fit-content;
+    }
     label { display: block; margin-top: 10px; }
-    input[type="number"] { width: 100%; padding: 4px; margin-top: 4px; }
+    input[type="text"], input[type="number"] { width: 100%; padding: 4px; margin-top: 4px; }
     .checkbox-group, .radio-group { margin-top: 8px; }
     .checkbox-group label, .radio-group label { margin-right: 10px; }
-    .result { background: #f9f9f9; padding: 10px; margin-top: 20px; border: 1px solid #ddd; }
+    .saved-list { margin-top: 10px; font-size: 0.9em; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    th { background-color: #f0f0f0; }
   </style>
 </head>
 <body>
-  <h1>SIJE 구독료 계산기</h1>
+  <div class="form-section">
+    <h1>SIJE 구독료 계산기</h1>
 
-  <label>공장 수
-    <input type="number" id="factories" value="0">
-  </label>
-  <label>재봉틀 수
-    <input type="number" id="machines" value="0">
-  </label>
-  <label>사용자 수 (Monolis)
-    <input type="number" id="users" value="0">
-  </label>
+    <label>회사명
+      <input type="text" id="companyName" placeholder="회사명을 입력하세요">
+    </label>
+    <label>공장 수
+      <input type="number" id="factories" value="0">
+    </label>
+    <label>재봉틀 수
+      <input type="number" id="machines" value="0">
+    </label>
+    <label>사용자 수 (Monolis)
+      <input type="number" id="users" value="0">
+    </label>
 
-  <label>도입 솔루션</label>
-  <div class="checkbox-group">
-    <label><input type="checkbox" id="monolog"> Monolog</label>
-    <label><input type="checkbox" id="moai"> MoAI</label>
-    <label><input type="checkbox" id="monolis"> Monolis</label>
+    <label>도입 솔루션</label>
+    <div class="checkbox-group">
+      <label><input type="checkbox" id="monolog"> Monolog</label>
+      <label><input type="checkbox" id="moai"> MoAI</label>
+      <label><input type="checkbox" id="monolis"> Monolis</label>
+    </div>
+
+    <label>도입 단계</label>
+    <div class="radio-group">
+      <label><input type="radio" name="stage" value="acquire" checked> Acquire</label>
+      <label><input type="radio" name="stage" value="expand"> Expand</label>
+      <label><input type="radio" name="stage" value="standardize"> Standardize</label>
+    </div>
+
+    <label>도입 스케줄 설명
+      <input type="text" id="scheduleDescription" placeholder="예: Monolog부터 시작, 1년 후 MoAI 도입...">
+    </label>
+
+    <button onclick="calculate()">계산하기</button>
+    <button onclick="saveCompanyData()">저장</button>
+    <button onclick="loadCompanyList()">불러오기</button>
+
+    <div class="saved-list" id="savedList"></div>
   </div>
-
-  <label>도입 단계</label>
-  <div class="radio-group">
-    <label><input type="radio" name="stage" value="acquire" checked> Acquire</label>
-    <label><input type="radio" name="stage" value="expand"> Expand</label>
-    <label><input type="radio" name="stage" value="standardize"> Standardize</label>
-  </div>
-
-  <button onclick="calculate()" style="margin-top: 15px; padding: 5px 10px;">계산하기</button>
 
   <div class="result" id="result"></div>
 
@@ -54,22 +88,72 @@
       const stage = document.querySelector('input[name="stage"]:checked').value;
 
       const rate = stage === 'expand' ? 0.2 : (stage === 'standardize' ? 0.7 : 0);
-
       const monologUnits = (machines * rate) / 120;
       const monologFee = monolog ? monologUnits * 1100 : 0;
       const moaiFee = (moai && monolog) ? monologFee * 2 : 0;
       const monolisFee = monolis ? users * 40 : 0;
       const totalFee = monologFee + moaiFee + monolisFee;
 
-      const html = `
-        <p>Monolog: $${monologFee.toFixed(2)}</p>
-        <p>MoAI: $${moaiFee.toFixed(2)}</p>
-        <p>Monolis: $${monolisFee.toFixed(2)}</p>
-        <p><strong>총 합계: $${totalFee.toFixed(2)} / 월</strong></p>
+      const table = `
+        <table>
+          <tr><th>항목</th><th>계산식</th><th>금액 (USD)</th></tr>
+          <tr><td>Monolog</td><td>(${machines} × ${rate}) ÷ 120 × 1100</td><td>$${monologFee.toFixed(2)}</td></tr>
+          <tr><td>MoAI</td><td>Monolog × 2</td><td>$${moaiFee.toFixed(2)}</td></tr>
+          <tr><td>Monolis</td><td>${users}명 × 40</td><td>$${monolisFee.toFixed(2)}</td></tr>
+          <tr><th colspan="2">총 합계</th><th>$${totalFee.toFixed(2)} / 월</th></tr>
+        </table>
         ${stage === 'acquire' ? '<p>💳 일회성 비용: $15,000</p>' : ''}
       `;
 
-      document.getElementById('result').innerHTML = html;
+      document.getElementById('result').innerHTML = table;
+    }
+
+    function saveCompanyData() {
+      const name = document.getElementById('companyName').value.trim();
+      if (!name) return alert("회사명을 입력하세요");
+
+      const data = {
+        factories: document.getElementById('factories').value,
+        machines: document.getElementById('machines').value,
+        users: document.getElementById('users').value,
+        monolog: document.getElementById('monolog').checked,
+        moai: document.getElementById('moai').checked,
+        monolis: document.getElementById('monolis').checked,
+        stage: document.querySelector('input[name="stage"]:checked').value,
+        schedule: document.getElementById('scheduleDescription').value.trim()
+      };
+      localStorage.setItem(`company_${name}`, JSON.stringify(data));
+      alert(`${name} 저장 완료!`);
+      loadCompanyList();
+    }
+
+    function loadCompanyList() {
+      const savedList = document.getElementById('savedList');
+      savedList.innerHTML = '<strong>저장된 회사:</strong><br>';
+
+      for (let key in localStorage) {
+        if (key.startsWith('company_')) {
+          const name = key.replace('company_', '');
+          savedList.innerHTML += `<button onclick="loadCompanyData('${name}')">${name}</button> `;
+        }
+      }
+    }
+
+    function loadCompanyData(name) {
+      const data = JSON.parse(localStorage.getItem(`company_${name}`));
+      if (!data) return alert("저장된 데이터가 없습니다.");
+
+      document.getElementById('companyName').value = name;
+      document.getElementById('factories').value = data.factories;
+      document.getElementById('machines').value = data.machines;
+      document.getElementById('users').value = data.users;
+      document.getElementById('monolog').checked = data.monolog;
+      document.getElementById('moai').checked = data.moai;
+      document.getElementById('monolis').checked = data.monolis;
+      document.querySelector(`input[name="stage"][value="${data.stage}"]`).checked = true;
+      document.getElementById('scheduleDescription').value = data.schedule || '';
+
+      calculate();
     }
   </script>
 </body>
