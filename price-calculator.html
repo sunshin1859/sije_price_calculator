@@ -25,13 +25,14 @@
       height: fit-content;
     }
     label { display: block; margin-top: 10px; }
-    input[type="text"], input[type="number"] { width: 100%; padding: 4px; margin-top: 4px; }
+    input[type="text"], input[type="number"], select { width: 100%; padding: 4px; margin-top: 4px; }
     .checkbox-group, .radio-group { margin-top: 8px; }
     .checkbox-group label, .radio-group label { margin-right: 10px; }
     .saved-list { margin-top: 10px; font-size: 0.9em; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
     th { background-color: #f0f0f0; }
+    .compare-table { margin-top: 20px; }
   </style>
 </head>
 <body>
@@ -40,6 +41,14 @@
 
     <label>회사명
       <input type="text" id="companyName" placeholder="회사명을 입력하세요">
+    </label>
+    <label>회사 구분
+      <select id="companyType" onchange="applyTypePreset()">
+        <option value="">선택</option>
+        <option value="production">생산 중심</option>
+        <option value="sourcing">소싱 중심</option>
+        <option value="data">데이터 중심</option>
+      </select>
     </label>
     <label>공장 수
       <input type="number" id="factories" value="0">
@@ -51,27 +60,11 @@
       <input type="number" id="users" value="0">
     </label>
 
-    <label>도입 솔루션</label>
-    <div class="checkbox-group">
-      <label><input type="checkbox" id="monolog"> Monolog</label>
-      <label><input type="checkbox" id="moai"> MoAI</label>
-      <label><input type="checkbox" id="monolis"> Monolis</label>
-    </div>
-
-    <label>도입 단계</label>
-    <div class="radio-group">
-      <label><input type="radio" name="stage" value="acquire" checked> Acquire</label>
-      <label><input type="radio" name="stage" value="expand"> Expand</label>
-      <label><input type="radio" name="stage" value="standardize"> Standardize</label>
-    </div>
-
     <label>도입 스케줄 설명
       <input type="text" id="scheduleDescription" placeholder="예: Monolog부터 시작, 1년 후 MoAI 도입...">
     </label>
 
-    <button onclick="calculate()">계산하기</button>
-    <button onclick="saveCompanyData()">저장</button>
-    <button onclick="loadCompanyList()">불러오기</button>
+    <button onclick="simulateAllStages()">3단계 자동 시뮬레이션</button>
 
     <div class="saved-list" id="savedList"></div>
   </div>
@@ -79,83 +72,75 @@
   <div class="result" id="result"></div>
 
   <script>
-    function calculate() {
-      const machines = parseInt(document.getElementById('machines').value) || 0;
-      const users = parseInt(document.getElementById('users').value) || 0;
-      const monolog = document.getElementById('monolog').checked;
-      const moai = document.getElementById('moai').checked;
-      const monolis = document.getElementById('monolis').checked;
-      const stage = document.querySelector('input[name="stage"]:checked').value;
-
+    function calculate(stage, monolog, moai, monolis, machines, users) {
       const rate = stage === 'expand' ? 0.2 : (stage === 'standardize' ? 0.7 : 0);
       const monologUnits = (machines * rate) / 120;
       const monologFee = monolog ? monologUnits * 1100 : 0;
       const moaiFee = (moai && monolog) ? monologFee * 2 : 0;
       const monolisFee = monolis ? users * 40 : 0;
       const totalFee = monologFee + moaiFee + monolisFee;
+      const stageLabel = stage === 'acquire' ? 'Acquire' : (stage === 'expand' ? 'Expand' : 'Standardize');
+      const timeline = stage === 'acquire' ? '0-1년' : (stage === 'expand' ? '2-3년' : '4년 이후');
 
-      const table = `
-        <table>
-          <tr><th>항목</th><th>계산식</th><th>금액 (USD)</th></tr>
-          <tr><td>Monolog</td><td>(${machines} × ${rate}) ÷ 120 × 1100</td><td>$${monologFee.toFixed(2)}</td></tr>
-          <tr><td>MoAI</td><td>Monolog × 2</td><td>$${moaiFee.toFixed(2)}</td></tr>
-          <tr><td>Monolis</td><td>${users}명 × 40</td><td>$${monolisFee.toFixed(2)}</td></tr>
-          <tr><th colspan="2">총 합계</th><th>$${totalFee.toFixed(2)} / 월</th></tr>
-        </table>
-        ${stage === 'acquire' ? '<p>💳 일회성 비용: $15,000</p>' : ''}
-      `;
-
-      document.getElementById('result').innerHTML = table;
-    }
-
-    function saveCompanyData() {
-      const name = document.getElementById('companyName').value.trim();
-      if (!name) return alert("회사명을 입력하세요");
-
-      const data = {
-        factories: document.getElementById('factories').value,
-        machines: document.getElementById('machines').value,
-        users: document.getElementById('users').value,
-        monolog: document.getElementById('monolog').checked,
-        moai: document.getElementById('moai').checked,
-        monolis: document.getElementById('monolis').checked,
-        stage: document.querySelector('input[name="stage"]:checked').value,
-        schedule: document.getElementById('scheduleDescription').value.trim()
+      return {
+        stage: stageLabel,
+        timeline: timeline,
+        fee: totalFee,
+        solutions: [
+          monolog ? 'Monolog' : null,
+          moai ? 'MoAI' : null,
+          monolis ? 'Monolis' : null
+        ].filter(Boolean).join(', ')
       };
-      localStorage.setItem(`company_${name}`, JSON.stringify(data));
-      alert(`${name} 저장 완료!`);
-      loadCompanyList();
     }
 
-    function loadCompanyList() {
-      const savedList = document.getElementById('savedList');
-      savedList.innerHTML = '<strong>저장된 회사:</strong><br>';
+    function simulateAllStages() {
+      const type = document.getElementById('companyType').value;
+      const name = document.getElementById('companyName').value;
+      const machines = parseInt(document.getElementById('machines').value) || 0;
+      const users = parseInt(document.getElementById('users').value) || 0;
 
-      for (let key in localStorage) {
-        if (key.startsWith('company_')) {
-          const name = key.replace('company_', '');
-          savedList.innerHTML += `<button onclick="loadCompanyData('${name}')">${name}</button> `;
-        }
+      let configs = [];
+      if (type === 'production') {
+        configs = [
+          ['acquire', true, false, false],
+          ['expand', true, true, false],
+          ['standardize', true, true, true],
+        ];
+      } else if (type === 'sourcing') {
+        configs = [
+          ['acquire', false, false, true],
+          ['expand', true, true, true],
+          ['standardize', true, true, true],
+        ];
+      } else if (type === 'data') {
+        configs = [
+          ['acquire', false, true, false],
+          ['expand', false, true, true],
+          ['standardize', false, true, true],
+        ];
+      } else {
+        alert("회사 구분을 선택하세요.");
+        return;
       }
-    }
 
-    function loadCompanyData(name) {
-      const data = JSON.parse(localStorage.getItem(`company_${name}`));
-      if (!data) return alert("저장된 데이터가 없습니다.");
+      let resultHtml = `<table>
+        <tr><th>기업명</th><th>단계</th><th>타임라인</th><th>월 구독료 (USD)</th><th>비고</th></tr>`;
 
-      document.getElementById('companyName').value = name;
-      document.getElementById('factories').value = data.factories;
-      document.getElementById('machines').value = data.machines;
-      document.getElementById('users').value = data.users;
-      document.getElementById('monolog').checked = data.monolog;
-      document.getElementById('moai').checked = data.moai;
-      document.getElementById('monolis').checked = data.monolis;
-      document.querySelector(`input[name="stage"][value="${data.stage}"]`).checked = true;
-      document.getElementById('scheduleDescription').value = data.schedule || '';
+      configs.forEach(([stage, monolog, moai, monolis]) => {
+        const result = calculate(stage, monolog, moai, monolis, machines, users);
+        resultHtml += `<tr>
+          <td>${name}</td>
+          <td>${result.stage}</td>
+          <td>${result.timeline}</td>
+          <td>${result.fee > 0 ? `$${result.fee.toLocaleString()}` : '0'}</td>
+          <td>${result.fee === 0 ? '일회성 비용 $15,000' : result.solutions}</td>
+        </tr>`;
+      });
 
-      calculate();
+      resultHtml += '</table>';
+      document.getElementById('result').innerHTML = resultHtml;
     }
   </script>
 </body>
 </html>
-
