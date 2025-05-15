@@ -59,6 +59,8 @@
   <div class="result" id="result"></div>
 
   <script>
+    const savedSimulations = [];
+
     function simulateDetails() {
       const type = document.getElementById('companyType').value;
       const name = document.getElementById('companyName').value;
@@ -86,49 +88,86 @@
         ]
       };
 
-      const installRate = { Expand: 0.2, Standardize: 0.7, Acquire: 0 };
+      const installRate = { Acquire: 0, Expand: 0.2, Standardize: 0.7 };
+      let monologInstalled = false;
+      let previousRate = 0;
+      let cumulative = 0;
 
-      const calc = (stage, year, solutions) => {
+      const results = stageMap[type]?.map(([stage, year, solutions]) => {
         const rate = installRate[stage] || 0;
         const monologQty = machines * rate;
+        const monologFee = solutions.includes('Monolog') ? (monologQty / 120) * 1100 : 0;
+        const moaiFee = solutions.includes('MoAI') && solutions.includes('Monolog') ? monologFee * 2 : 0;
+        const monolisFee = solutions.includes('Monolis') ? users * 40 : 0;
+
+        let monologInstall = '';
+        if (solutions.includes('Monolog') && (rate > previousRate || !monologInstalled)) {
+          monologInstall = `$${(machines * 100 * (rate - previousRate)).toFixed(0)}`;
+          monologInstalled = true;
+        }
+
+        const total = monologFee + moaiFee + monolisFee;
+        cumulative += total;
+
+        previousRate = rate;
+
         return {
           year,
           stage,
-          monologInstall: solutions.includes('Monolog') && stage === 'Acquire' ? `$${(machines * 100).toLocaleString()}` : '',
-          monologFee: solutions.includes('Monolog') ? `$${((monologQty / 120) * 1100).toFixed(2)}` : '',
+          monologInstall,
+          monologFee: monologFee ? `$${monologFee.toFixed(2)}` : '',
           monolisInstall: '',
-          monolisFee: solutions.includes('Monolis') ? `$${(users * 40).toFixed(2)}` : '',
+          monolisFee: monolisFee ? `$${monolisFee.toFixed(2)}` : '',
           moaiInstall: '',
-          moaiFee: solutions.includes('MoAI') && solutions.includes('Monolog') ? `$${(((monologQty / 120) * 1100) * 2).toFixed(2)}` : '',
+          moaiFee: moaiFee ? `$${moaiFee.toFixed(2)}` : '',
+          total: `$${total.toFixed(2)}`,
+          cumulative: `$${cumulative.toFixed(2)}`,
+          monologUsers: solutions.includes('Monolog') ? Math.round(machines * rate) : 0,
+          monolisUsers: solutions.includes('Monolis') ? users : 0
         };
-      };
+      });
 
-      const rows = stageMap[type]?.map(([stage, year, solutions]) => calc(stage, year, solutions)) || [];
+      savedSimulations.push({ name, results });
 
+      let html = '<h2>시뮬레이션 결과</h2>';
+      html += `<select onchange="showSaved(this.value)"><option value="">▼ 저장된 회사 선택</option>`;
+      savedSimulations.forEach((sim, i) => {
+        html += `<option value="${i}">${sim.name}</option>`;
+      });
+      html += `</select>`;
+
+      html += renderTable(results, name);
+      document.getElementById('result').innerHTML = html;
+    }
+
+    function showSaved(index) {
+      if (index === '') return;
+      const { name, results } = savedSimulations[parseInt(index)];
+      document.getElementById('result').innerHTML = renderTable(results, name);
+    }
+
+    function renderTable(rows, name) {
       let html = `<table>
-        <tr>
-          <th rowspan="2">회사명</th><th rowspan="2">단계</th><th rowspan="2">연도</th>
-          <th colspan="2">Monolog</th><th colspan="2">Monolis</th><th colspan="2">MoAI</th><th rowspan="2">총 매출</th>
-        </tr>
+        <tr><th rowspan="2">회사명</th><th rowspan="2">단계</th><th rowspan="2">연도</th>
+        <th colspan="2">Monolog</th><th colspan="2">Monolis</th><th colspan="2">MoAI</th>
+        <th rowspan="2">총 매출</th><th rowspan="2">누적 매출</th>
+        <th rowspan="2">Monolog 사용자</th><th rowspan="2">Monolis 사용자</th></tr>
         <tr><th>설치비</th><th>구독료</th><th>설치비</th><th>구독료</th><th>설치비</th><th>구독료</th></tr>`;
 
       rows.forEach(r => {
-        const monolog = parseFloat(r.monologFee.replace(/[$,]/g, '')) || 0;
-        const monolis = parseFloat(r.monolisFee.replace(/[$,]/g, '')) || 0;
-        const moai = parseFloat(r.moaiFee.replace(/[$,]/g, '')) || 0;
-        const total = monolog + monolis + moai;
         html += `<tr>
           <td>${name}</td><td>${r.stage}</td><td>${r.year}개년</td>
           <td>${r.monologInstall}</td><td>${r.monologFee}</td>
           <td>${r.monolisInstall}</td><td>${r.monolisFee}</td>
           <td>${r.moaiInstall}</td><td>${r.moaiFee}</td>
-          <td>$${total.toFixed(2)}</td>
+          <td>${r.total}</td><td>${r.cumulative}</td>
+          <td>${r.monologUsers}</td><td>${r.monolisUsers}</td>
         </tr>`;
       });
-
       html += '</table>';
-      document.getElementById('result').innerHTML = html;
+      return html;
     }
   </script>
 </body>
 </html>
+
