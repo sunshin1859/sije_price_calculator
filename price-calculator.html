@@ -95,7 +95,7 @@
       <label>사용자 수 (Monolis)
         <input type="number" id="users" value="0">
       </label>
-      <button onclick="simulateDetails()">상세 시뮬레이션</button>
+      <button id="simulateBtn">상세 시뮬레이션</button>
 
       <div class="saved-list">
         <h4>📂 저장된 시뮬레이션 보기</h4>
@@ -163,6 +163,17 @@
     <canvas id="userChart" width="600" height="300"></canvas>
   </div>
 
-  <script src="script.js"></script>
+  <script>
+    // 자바스크립트 코드 작성 위치
+    document.getElementById("simulateBtn").addEventListener("click", simulateDetails);
+    
+    function simulateDetails() {
+      document.getElementById("result").innerHTML = `<p>시뮬레이션 결과를 여기에 표시합니다. 회사명, 구분, 구독료 정보 등은 JavaScript로 계산하여 이곳에 표 형태로 삽입됩니다.</p>`;
+    }
+
+    function showComparison() {
+      document.getElementById("comparisonResult").innerHTML = `<p>여기에는 비교 분석 결과가 출력됩니다. 선택된 복수 회사의 연도별 총매출 및 사용자 수를 테이블 및 그래프로 구성하세요.</p>`;
+    }
+  </script>
 </body>
 </html>
