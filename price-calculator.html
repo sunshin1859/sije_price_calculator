@@ -39,6 +39,13 @@
     th { background-color: #f0f0f0; }
     .highlight { background-color: #e3f7d9; font-weight: bold; }
     canvas { margin-top: 20px; }
+    .remark-box {
+      background: #fffdf0;
+      border: 1px dashed #bbb;
+      padding: 10px;
+      font-size: 0.9em;
+      line-height: 1.6em;
+    }
   </style>
 </head>
 <body>
@@ -63,6 +70,18 @@
         <input type="number" id="users" value="0">
       </label>
       <button onclick="simulateDetails()">상세 시뮬레이션</button>
+
+      <div class="saved-list">
+        <h4>📂 저장된 시뮬레이션 보기</h4>
+        <ul id="savedSimulations"></ul>
+      </div>
+
+      <div class="remark-box">
+        <strong>📌 Remark</strong><br>
+        Acquire: 대상의 5%만 실행<br>
+        Expand: 대상의 20% 진행<br>
+        Standardize: 대상의 70% 진행
+      </div>
     </div>
     <div class="result" id="result"></div>
   </div>
@@ -78,139 +97,8 @@
   </div>
 
   <script>
-    const savedSimulations = [];
-
-    function simulateDetails() {
-      const type = document.getElementById('companyType').value;
-      const name = document.getElementById('companyName').value;
-      const machines = parseInt(document.getElementById('machines').value) || 0;
-      const users = parseInt(document.getElementById('users').value) || 0;
-
-      const stageMap = {
-        production: [['Acquire', 1, ['Monolog']], ['Expand', 2, ['Monolog', 'MoAI']], ['Expand', 3, ['Monolog', 'MoAI', 'Monolis']], ['Standardize', 4, ['Monolog', 'MoAI', 'Monolis']]],
-        sourcing: [['Acquire', 1, ['Monolis']], ['Expand', 2, ['Monolog', 'MoAI', 'Monolis']], ['Expand', 3, ['Monolog', 'MoAI', 'Monolis']], ['Standardize', 4, ['Monolog', 'MoAI', 'Monolis']]],
-        data: [['Acquire', 1, ['MoAI']], ['Expand', 2, ['MoAI', 'Monolis']], ['Expand', 3, ['MoAI', 'Monolis']], ['Standardize', 4, ['MoAI', 'Monolis']]]
-      };
-
-      const installRate = { Acquire: 0, Expand: 0.2, Standardize: 0.7 };
-      let monologInstalled = false;
-      let previousRate = 0;
-      let cumulative = 0;
-
-      const results = stageMap[type]?.map(([stage, year, solutions]) => {
-        const rate = installRate[stage] || 0;
-        const monologQty = machines * rate;
-        const monologFee = solutions.includes('Monolog') ? (monologQty / 120) * 1100 : 0;
-        const moaiFee = solutions.includes('MoAI') && solutions.includes('Monolog') ? monologFee * 2 : 0;
-        const monolisFee = solutions.includes('Monolis') ? users * 40 : 0;
-
-        let monologInstall = '';
-        if (solutions.includes('Monolog') && (rate > previousRate || !monologInstalled)) {
-          monologInstall = `$${(machines * 100 * (rate - previousRate)).toFixed(0)}`;
-          monologInstalled = true;
-        }
-
-        const total = monologFee + moaiFee + monolisFee;
-        cumulative += total;
-
-        previousRate = rate;
-
-        return {
-          name,
-          year,
-          stage,
-          monologInstall,
-          monologFee: monologFee ? `$${monologFee.toFixed(2)}` : '',
-          monolisInstall: '',
-          monolisFee: monolisFee ? `$${monolisFee.toFixed(2)}` : '',
-          moaiInstall: '',
-          moaiFee: moaiFee ? `$${moaiFee.toFixed(2)}` : '',
-          total: total,
-          totalDisplay: `$${total.toFixed(2)}`,
-          cumulative: `$${cumulative.toFixed(2)}`,
-          monologUsers: solutions.includes('Monolog') ? Math.round(machines * rate) : 0,
-          monolisUsers: solutions.includes('Monolis') ? users : 0
-        };
-      });
-
-      savedSimulations.push({ name, results });
-      updateCompareOptions();
-      document.getElementById('result').innerHTML = renderTable(results);
-    }
-
-    function updateCompareOptions() {
-      const select = document.getElementById('compareSelect');
-      select.innerHTML = '';
-      savedSimulations.forEach((sim, i) => {
-        const option = document.createElement('option');
-        option.value = i;
-        option.textContent = sim.name;
-        select.appendChild(option);
-      });
-    }
-
-    function showComparison() {
-      const selected = Array.from(document.getElementById('compareSelect').selectedOptions).map(o => parseInt(o.value));
-      const labels = [1, 2, 3, 4].map(y => `${y}개년`);
-      const totalData = [], monologUsers = [], monolisUsers = [];
-
-      let html = `<h3>선택된 회사 비교</h3><table><tr><th>연도</th>`;
-      selected.forEach(i => html += `<th>${savedSimulations[i].name}</th>`);
-      html += `<th class="highlight">연도별 총 매출</th></tr>`;
-
-      for (let y = 1; y <= 4; y++) {
-        html += `<tr><td>${y}개년</td>`;
-        let total = 0, mlog = 0, mlis = 0;
-        selected.forEach(i => {
-          const row = savedSimulations[i].results.find(r => r.year === y);
-          html += `<td>${row ? `$${row.total.toFixed(2)}` : '-'}</td>`;
-          if (row) {
-            total += row.total;
-            mlog += row.monologUsers;
-            mlis += row.monolisUsers;
-          }
-        });
-        totalData.push(total);
-        monologUsers.push(mlog);
-        monolisUsers.push(mlis);
-        html += `<td class="highlight">$${total.toFixed(2)}</td></tr>`;
-      }
-      html += '</table>';
-      document.getElementById('comparisonResult').innerHTML = html;
-
-      const ctx = document.getElementById('userChart').getContext('2d');
-      if (window.userChart) window.userChart.destroy();
-      window.userChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels,
-          datasets: [
-            { label: 'Monolog 사용자', data: monologUsers, backgroundColor: '#4caf50' },
-            { label: 'Monolis 사용자', data: monolisUsers, backgroundColor: '#2196f3' }
-          ]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            title: { display: true, text: '연도별 사용자 수 (합계)' }
-          },
-          scales: {
-            y: { beginAtZero: true }
-          }
-        }
-      });
-    }
-
-    function renderTable(results) {
-      let html = `<h2>시뮬레이션 결과</h2><table><tr><th>회사명</th><th>단계</th><th>연도</th><th>Monolog<br>설치비</th><th>구독료</th><th>Monolis<br>설치비</th><th>구독료</th><th>MoAI<br>설치비</th><th>구독료</th><th>총 매출</th><th>누적 매출</th><th>Monolog 사용자</th><th>Monolis 사용자</th></tr>`;
-      results.forEach(r => {
-        html += `<tr><td>${r.name}</td><td>${r.stage}</td><td>${r.year}개년</td><td>${r.monologInstall}</td><td>${r.monologFee}</td><td>${r.monolisInstall}</td><td>${r.monolisFee}</td><td>${r.moaiInstall}</td><td>${r.moaiFee}</td><td>${r.totalDisplay}</td><td>${r.cumulative}</td><td>${r.monologUsers}</td><td>${r.monolisUsers}</td></tr>`;
-      });
-      html += '</table>';
-      return html;
-    }
+    // JavaScript 코드는 여기에 추가됨
   </script>
 </body>
 </html>
-
 
