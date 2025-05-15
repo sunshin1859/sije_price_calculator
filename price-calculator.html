@@ -7,7 +7,7 @@
   <style>
     body {
       font-family: sans-serif;
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 20px auto;
       padding: 20px;
       display: flex;
@@ -18,40 +18,34 @@
       flex: 1;
     }
     .result {
-      flex: 1;
+      flex: 2;
       background: #f9f9f9;
       padding: 10px;
       border: 1px solid #ddd;
       height: fit-content;
+      overflow-x: auto;
     }
     label { display: block; margin-top: 10px; }
     input[type="text"], input[type="number"], select { width: 100%; padding: 4px; margin-top: 4px; }
-    .checkbox-group, .radio-group { margin-top: 8px; }
-    .checkbox-group label, .radio-group label { margin-right: 10px; }
     .saved-list { margin-top: 10px; font-size: 0.9em; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; }
+    th, td { border: 1px solid #ddd; padding: 6px; text-align: center; }
     th { background-color: #f0f0f0; }
-    .compare-table { margin-top: 20px; }
   </style>
 </head>
 <body>
   <div class="form-section">
     <h1>SIJE 구독료 계산기</h1>
-
     <label>회사명
       <input type="text" id="companyName" placeholder="회사명을 입력하세요">
     </label>
     <label>회사 구분
-      <select id="companyType" onchange="applyTypePreset()">
+      <select id="companyType">
         <option value="">선택</option>
         <option value="production">생산 중심</option>
         <option value="sourcing">소싱 중심</option>
         <option value="data">데이터 중심</option>
       </select>
-    </label>
-    <label>공장 수
-      <input type="number" id="factories" value="0">
     </label>
     <label>재봉틀 수
       <input type="number" id="machines" value="0">
@@ -59,87 +53,81 @@
     <label>사용자 수 (Monolis)
       <input type="number" id="users" value="0">
     </label>
-
-    <label>도입 스케줄 설명
-      <input type="text" id="scheduleDescription" placeholder="예: Monolog부터 시작, 1년 후 MoAI 도입...">
-    </label>
-
-    <button onclick="simulateAllStages()">3단계 자동 시뮬레이션</button>
-
+    <button onclick="simulateDetails()">상세 시뮬레이션</button>
     <div class="saved-list" id="savedList"></div>
   </div>
-
   <div class="result" id="result"></div>
 
   <script>
-    function calculate(stage, monolog, moai, monolis, machines, users) {
-      const rate = stage === 'expand' ? 0.2 : (stage === 'standardize' ? 0.7 : 0);
-      const monologUnits = (machines * rate) / 120;
-      const monologFee = monolog ? monologUnits * 1100 : 0;
-      const moaiFee = (moai && monolog) ? monologFee * 2 : 0;
-      const monolisFee = monolis ? users * 40 : 0;
-      const totalFee = monologFee + moaiFee + monolisFee;
-      const stageLabel = stage === 'acquire' ? 'Acquire' : (stage === 'expand' ? 'Expand' : 'Standardize');
-      const timeline = stage === 'acquire' ? '0-1년' : (stage === 'expand' ? '2-3년' : '4년 이후');
-
-      return {
-        stage: stageLabel,
-        timeline: timeline,
-        fee: totalFee,
-        solutions: [
-          monolog ? 'Monolog' : null,
-          moai ? 'MoAI' : null,
-          monolis ? 'Monolis' : null
-        ].filter(Boolean).join(', ')
-      };
-    }
-
-    function simulateAllStages() {
+    function simulateDetails() {
       const type = document.getElementById('companyType').value;
       const name = document.getElementById('companyName').value;
       const machines = parseInt(document.getElementById('machines').value) || 0;
       const users = parseInt(document.getElementById('users').value) || 0;
 
-      let configs = [];
-      if (type === 'production') {
-        configs = [
-          ['acquire', true, false, false],
-          ['expand', true, true, false],
-          ['standardize', true, true, true],
-        ];
-      } else if (type === 'sourcing') {
-        configs = [
-          ['acquire', false, false, true],
-          ['expand', true, true, true],
-          ['standardize', true, true, true],
-        ];
-      } else if (type === 'data') {
-        configs = [
-          ['acquire', false, true, false],
-          ['expand', false, true, true],
-          ['standardize', false, true, true],
-        ];
-      } else {
-        alert("회사 구분을 선택하세요.");
-        return;
-      }
+      const stageMap = {
+        production: [
+          ['Acquire', 1, ['Monolog']],
+          ['Expand', 2, ['Monolog', 'MoAI']],
+          ['Expand', 3, ['Monolog', 'MoAI', 'Monolis']],
+          ['Standardize', 4, ['Monolog', 'MoAI', 'Monolis']]
+        ],
+        sourcing: [
+          ['Acquire', 1, ['Monolis']],
+          ['Expand', 2, ['Monolog', 'MoAI', 'Monolis']],
+          ['Expand', 3, ['Monolog', 'MoAI', 'Monolis']],
+          ['Standardize', 4, ['Monolog', 'MoAI', 'Monolis']]
+        ],
+        data: [
+          ['Acquire', 1, ['MoAI']],
+          ['Expand', 2, ['MoAI', 'Monolis']],
+          ['Expand', 3, ['MoAI', 'Monolis']],
+          ['Standardize', 4, ['MoAI', 'Monolis']]
+        ]
+      };
 
-      let resultHtml = `<table>
-        <tr><th>기업명</th><th>단계</th><th>타임라인</th><th>월 구독료 (USD)</th><th>비고</th></tr>`;
+      const installRate = { Expand: 0.2, Standardize: 0.7, Acquire: 0 };
 
-      configs.forEach(([stage, monolog, moai, monolis]) => {
-        const result = calculate(stage, monolog, moai, monolis, machines, users);
-        resultHtml += `<tr>
-          <td>${name}</td>
-          <td>${result.stage}</td>
-          <td>${result.timeline}</td>
-          <td>${result.fee > 0 ? `$${result.fee.toLocaleString()}` : '0'}</td>
-          <td>${result.fee === 0 ? '일회성 비용 $15,000' : result.solutions}</td>
+      const calc = (stage, year, solutions) => {
+        const rate = installRate[stage] || 0;
+        const monologQty = machines * rate;
+        return {
+          year,
+          stage,
+          monologInstall: solutions.includes('Monolog') && stage === 'Acquire' ? `$${(machines * 100).toLocaleString()}` : '',
+          monologFee: solutions.includes('Monolog') ? `$${((monologQty / 120) * 1100).toFixed(2)}` : '',
+          monolisInstall: '',
+          monolisFee: solutions.includes('Monolis') ? `$${(users * 40).toFixed(2)}` : '',
+          moaiInstall: '',
+          moaiFee: solutions.includes('MoAI') && solutions.includes('Monolog') ? `$${(((monologQty / 120) * 1100) * 2).toFixed(2)}` : '',
+        };
+      };
+
+      const rows = stageMap[type]?.map(([stage, year, solutions]) => calc(stage, year, solutions)) || [];
+
+      let html = `<table>
+        <tr>
+          <th rowspan="2">회사명</th><th rowspan="2">단계</th><th rowspan="2">연도</th>
+          <th colspan="2">Monolog</th><th colspan="2">Monolis</th><th colspan="2">MoAI</th><th rowspan="2">총 매출</th>
+        </tr>
+        <tr><th>설치비</th><th>구독료</th><th>설치비</th><th>구독료</th><th>설치비</th><th>구독료</th></tr>`;
+
+      rows.forEach(r => {
+        const monolog = parseFloat(r.monologFee.replace(/[$,]/g, '')) || 0;
+        const monolis = parseFloat(r.monolisFee.replace(/[$,]/g, '')) || 0;
+        const moai = parseFloat(r.moaiFee.replace(/[$,]/g, '')) || 0;
+        const total = monolog + monolis + moai;
+        html += `<tr>
+          <td>${name}</td><td>${r.stage}</td><td>${r.year}개년</td>
+          <td>${r.monologInstall}</td><td>${r.monologFee}</td>
+          <td>${r.monolisInstall}</td><td>${r.monolisFee}</td>
+          <td>${r.moaiInstall}</td><td>${r.moaiFee}</td>
+          <td>$${total.toFixed(2)}</td>
         </tr>`;
       });
 
-      resultHtml += '</table>';
-      document.getElementById('result').innerHTML = resultHtml;
+      html += '</table>';
+      document.getElementById('result').innerHTML = html;
     }
   </script>
 </body>
