@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SIJE 구독료 계산기</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable.css" rel="stylesheet">
   <style>
     body {
-      font-family: sans-serif;
+      font-family: 'Pretendard Variable', sans-serif;
       max-width: 1400px;
       margin: 20px auto;
       padding: 20px;
@@ -199,7 +200,17 @@
         }
       });
     }
+
+    function renderTable(results) {
+      let html = `<h2>시뮬레이션 결과</h2><table><tr><th>회사명</th><th>단계</th><th>연도</th><th>Monolog<br>설치비</th><th>구독료</th><th>Monolis<br>설치비</th><th>구독료</th><th>MoAI<br>설치비</th><th>구독료</th><th>총 매출</th><th>누적 매출</th><th>Monolog 사용자</th><th>Monolis 사용자</th></tr>`;
+      results.forEach(r => {
+        html += `<tr><td>${r.name}</td><td>${r.stage}</td><td>${r.year}개년</td><td>${r.monologInstall}</td><td>${r.monologFee}</td><td>${r.monolisInstall}</td><td>${r.monolisFee}</td><td>${r.moaiInstall}</td><td>${r.moaiFee}</td><td>${r.totalDisplay}</td><td>${r.cumulative}</td><td>${r.monologUsers}</td><td>${r.monolisUsers}</td></tr>`;
+      });
+      html += '</table>';
+      return html;
+    }
   </script>
 </body>
 </html>
+
 
