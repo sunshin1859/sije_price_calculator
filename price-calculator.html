@@ -72,6 +72,17 @@
     .service-table th {
       background-color: #f5f5f5;
     }
+    button {
+      padding: 8px 16px;
+      margin-top: 10px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
   </style>
 </head>
 <body>
@@ -96,6 +107,7 @@
         <input type="number" id="users" value="0">
       </label>
       <button id="simulateBtn">상세 시뮬레이션</button>
+      <button id="saveBtn">시뮬레이션 저장</button>
 
       <div class="saved-list">
         <h4>📂 저장된 시뮬레이션 보기</h4>
@@ -164,15 +176,345 @@
   </div>
 
   <script>
-    // 자바스크립트 코드 작성 위치
-    document.getElementById("simulateBtn").addEventListener("click", simulateDetails);
+    // 저장된 시뮬레이션 데이터
+    let savedSimulations = JSON.parse(localStorage.getItem('sijeSimulations')) || [];
+    let currentSimulation = null;
     
+    // DOM 요소 가져오기
+    const simulateBtn = document.getElementById("simulateBtn");
+    const saveBtn = document.getElementById("saveBtn");
+    const savedSimulationsList = document.getElementById("savedSimulations");
+    const compareSelect = document.getElementById("compareSelect");
+    
+    // 이벤트 리스너 등록
+    simulateBtn.addEventListener("click", simulateDetails);
+    saveBtn.addEventListener("click", saveSimulation);
+    
+    // 페이지 로드 시 저장된 시뮬레이션 목록 업데이트
+    updateSavedSimulationsList();
+    
+    // 상세 시뮬레이션 함수
     function simulateDetails() {
-      document.getElementById("result").innerHTML = `<p>시뮬레이션 결과를 여기에 표시합니다. 회사명, 구분, 구독료 정보 등은 JavaScript로 계산하여 이곳에 표 형태로 삽입됩니다.</p>`;
+      const companyName = document.getElementById("companyName").value;
+      const companyType = document.getElementById("companyType").value;
+      const machines = parseInt(document.getElementById("machines").value) || 0;
+      const users = parseInt(document.getElementById("users").value) || 0;
+      
+      if (!companyName || !companyType) {
+        alert("회사명과 회사 구분을 입력해주세요.");
+        return;
+      }
+      
+      // 계산 수행
+      const result = calculateSubscription(companyType, machines, users);
+      currentSimulation = {
+        companyName,
+        companyType,
+        machines,
+        users,
+        result
+      };
+      
+      // 결과 표시
+      displayResult(result, companyName);
     }
-
+    
+    // 구독료 계산 함수
+    function calculateSubscription(companyType, machines, users) {
+      const MONOLOG_UNIT_PRICE = 1200000; // 120대당 월 구독료
+      const MONOLIS_PRICE = 50000; // 1인당 월 구독료
+      const INSTALLATION_FEE = 5000000; // 설치비
+      
+      const result = {
+        years: []
+      };
+      
+      for (let year = 1; year <= 4; year++) {
+        let yearData = {
+          year,
+          monolog: 0,
+          moai: 0,
+          monolis: 0,
+          installation: 0,
+          total: 0
+        };
+        
+        // 적용 비율 계산
+        let applyRatio = 0;
+        if (year === 1) applyRatio = 0.05; // Acquire (5%)
+        else if (year === 2 || year === 3) applyRatio = 0.2; // Expand (20%)
+        else if (year === 4) applyRatio = 0.7; // Standardize (70%)
+        
+        // 회사 유형별 서비스 구성
+        if (companyType === "production") {
+          // 생산 중심
+          if (year === 1) {
+            // Monolog만
+            yearData.monolog = Math.ceil(machines * applyRatio / 120) * MONOLOG_UNIT_PRICE;
+            yearData.installation = INSTALLATION_FEE;
+          } else if (year === 2) {
+            // Monolog + MoAI
+            yearData.monolog = Math.ceil(machines * applyRatio / 120) * MONOLOG_UNIT_PRICE;
+            yearData.moai = yearData.monolog * 2;
+          } else if (year >= 3) {
+            // Monolog + MoAI + Monolis
+            yearData.monolog = Math.ceil(machines * applyRatio / 120) * MONOLOG_UNIT_PRICE;
+            yearData.moai = yearData.monolog * 2;
+            yearData.monolis = Math.ceil(users * applyRatio) * MONOLIS_PRICE;
+          }
+        } else if (companyType === "sourcing") {
+          // 소싱 중심
+          if (year === 1) {
+            // Monolis만
+            yearData.monolis = Math.ceil(users * applyRatio) * MONOLIS_PRICE;
+          } else if (year >= 2) {
+            // Monolog + MoAI + Monolis
+            yearData.monolog = Math.ceil(machines * applyRatio / 120) * MONOLOG_UNIT_PRICE;
+            if (year === 2) yearData.installation = INSTALLATION_FEE;
+            yearData.moai = yearData.monolog * 2;
+            yearData.monolis = Math.ceil(users * applyRatio) * MONOLIS_PRICE;
+          }
+        } else if (companyType === "data") {
+          // 데이터 중심
+          if (year === 1) {
+            // MoAI만 (Monolog 기반)
+            const monologBase = Math.ceil(machines * applyRatio / 120) * MONOLOG_UNIT_PRICE;
+            yearData.moai = monologBase * 2;
+            yearData.installation = INSTALLATION_FEE;
+          } else if (year >= 2) {
+            // MoAI + Monolis
+            const monologBase = Math.ceil(machines * applyRatio / 120) * MONOLOG_UNIT_PRICE;
+            yearData.moai = monologBase * 2;
+            yearData.monolis = Math.ceil(users * applyRatio) * MONOLIS_PRICE;
+          }
+        }
+        
+        // 총액 계산
+        yearData.total = yearData.monolog + yearData.moai + yearData.monolis + yearData.installation;
+        result.years.push(yearData);
+      }
+      
+      return result;
+    }
+    
+    // 결과 표시 함수
+    function displayResult(result, companyName) {
+      let html = `<h2>${companyName} 시뮬레이션 결과</h2>`;
+      html += `<table>
+        <tr>
+          <th>연도</th>
+          <th>Monolog</th>
+          <th>MoAI</th>
+          <th>Monolis</th>
+          <th>설치비</th>
+          <th class="highlight">총액</th>
+        </tr>`;
+      
+      result.years.forEach(yearData => {
+        html += `<tr>
+          <td>${yearData.year}년차</td>
+          <td>${formatCurrency(yearData.monolog)}</td>
+          <td>${formatCurrency(yearData.moai)}</td>
+          <td>${formatCurrency(yearData.monolis)}</td>
+          <td>${formatCurrency(yearData.installation)}</td>
+          <td class="highlight">${formatCurrency(yearData.total)}</td>
+        </tr>`;
+      });
+      
+      html += `</table>`;
+      document.getElementById("result").innerHTML = html;
+    }
+    
+    // 통화 형식으로 변환
+    function formatCurrency(amount) {
+      return amount ? amount.toLocaleString('ko-KR') + '원' : '-';
+    }
+    
+    // 시뮬레이션 저장 함수
+    function saveSimulation() {
+      if (!currentSimulation) {
+        alert("먼저 시뮬레이션을 실행해주세요.");
+        return;
+      }
+      
+      // 중복 확인
+      const exists = savedSimulations.some(sim => 
+        sim.companyName === currentSimulation.companyName && 
+        sim.companyType === currentSimulation.companyType
+      );
+      
+      if (exists) {
+        alert("이미 동일한 회사명과 유형의 시뮬레이션이 저장되어 있습니다.");
+        return;
+      }
+      
+      savedSimulations.push(currentSimulation);
+      localStorage.setItem('sijeSimulations', JSON.stringify(savedSimulations));
+      updateSavedSimulationsList();
+      updateCompareSelect();
+      alert("시뮬레이션이 저장되었습니다.");
+    }
+    
+    // 저장된 시뮬레이션 목록 업데이트
+    function updateSavedSimulationsList() {
+      savedSimulationsList.innerHTML = '';
+      
+      if (savedSimulations.length === 0) {
+        savedSimulationsList.innerHTML = '<li>저장된 시뮬레이션이 없습니다.</li>';
+        return;
+      }
+      
+      savedSimulations.forEach((sim, index) => {
+        const li = document.createElement('li');
+        li.innerHTML = `<strong>${sim.companyName}</strong> (${getCompanyTypeName(sim.companyType)}) 
+          - 기계: ${sim.machines}대, 사용자: ${sim.users}명 
+          <button onclick="loadSimulation(${index})">보기</button>
+          <button onclick="deleteSimulation(${index})">삭제</button>`;
+        savedSimulationsList.appendChild(li);
+      });
+    }
+    
+    // 비교 선택 옵션 업데이트
+    function updateCompareSelect() {
+      compareSelect.innerHTML = '';
+      
+      savedSimulations.forEach((sim, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = `${sim.companyName} (${getCompanyTypeName(sim.companyType)})`;
+        compareSelect.appendChild(option);
+      });
+    }
+    
+    // 회사 유형 이름 가져오기
+    function getCompanyTypeName(type) {
+      switch(type) {
+        case 'production': return '생산 중심';
+        case 'sourcing': return '소싱 중심';
+        case 'data': return '데이터 중심';
+        default: return type;
+      }
+    }
+    
+    // 시뮬레이션 로드
+    function loadSimulation(index) {
+      if (index >= 0 && index < savedSimulations.length) {
+        currentSimulation = savedSimulations[index];
+        document.getElementById("companyName").value = currentSimulation.companyName;
+        document.getElementById("companyType").value = currentSimulation.companyType;
+        document.getElementById("machines").value = currentSimulation.machines;
+        document.getElementById("users").value = currentSimulation.users;
+        displayResult(currentSimulation.result, currentSimulation.companyName);
+      }
+    }
+    
+    // 시뮬레이션 삭제
+    function deleteSimulation(index) {
+      if (confirm("정말 이 시뮬레이션을 삭제하시겠습니까?")) {
+        savedSimulations.splice(index, 1);
+        localStorage.setItem('sijeSimulations', JSON.stringify(savedSimulations));
+        updateSavedSimulationsList();
+        updateCompareSelect();
+      }
+    }
+    
+    // 비교 분석 실행
     function showComparison() {
-      document.getElementById("comparisonResult").innerHTML = `<p>여기에는 비교 분석 결과가 출력됩니다. 선택된 복수 회사의 연도별 총매출 및 사용자 수를 테이블 및 그래프로 구성하세요.</p>`;
+      const selectedIndices = Array.from(compareSelect.selectedOptions).map(opt => parseInt(opt.value));
+      
+      if (selectedIndices.length < 2) {
+        alert("비교를 위해 최소 2개 이상의 시뮬레이션을 선택해주세요.");
+        return;
+      }
+      
+      const selectedSimulations = selectedIndices.map(index => savedSimulations[index]);
+      displayComparison(selectedSimulations);
+    }
+    
+    // 비교 결과 표시
+    function displayComparison(simulations) {
+      let html = `<h3>비교 분석 결과</h3><table><tr><th>회사명</th>`;
+      
+      // 테이블 헤더 생성 (연도별)
+      for (let year = 1; year <= 4; year++) {
+        html += `<th>${year}년차 총액</th>`;
+      }
+      html += `</tr>`;
+      
+      // 각 시뮬레이션 데이터 행 추가
+      simulations.forEach(sim => {
+        html += `<tr><td>${sim.companyName}</td>`;
+        sim.result.years.forEach(yearData => {
+          html += `<td>${formatCurrency(yearData.total)}</td>`;
+        });
+        html += `</tr>`;
+      });
+      
+      html += `</table>`;
+      document.getElementById("comparisonResult").innerHTML = html;
+      
+      // 차트 생성
+      createComparisonChart(simulations);
+    }
+    
+    // 비교 차트 생성
+    function createComparisonChart(simulations) {
+      const ctx = document.getElementById('userChart').getContext('2d');
+      
+      // 기존 차트가 있으면 제거
+      if (window.comparisonChart) {
+        window.comparisonChart.destroy();
+      }
+      
+      const labels = simulations.map(sim => sim.companyName);
+      const datasets = [];
+      
+      // 연도별 데이터셋 생성
+      for (let year = 1; year <= 4; year++) {
+        datasets.push({
+          label: `${year}년차`,
+          data: simulations.map(sim => sim.result.years[year-1].total),
+          backgroundColor: getRandomColor(),
+          borderColor: getRandomColor(),
+          borderWidth: 1
+        });
+      }
+      
+      window.comparisonChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: '구독료 (원)'
+              }
+            },
+            x: {
+              title: {
+                display: true,
+                text: '회사명'
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    // 랜덤 색상 생성
+    function getRandomColor() {
+      const letters = '0123456789ABCDEF';
+      let color = '#';
+      for (let i = 0; i < 6; i++) {
+        color += letters[Math.floor(Math.random() * 16)];
+      }
+      return color;
     }
   </script>
 </body>
