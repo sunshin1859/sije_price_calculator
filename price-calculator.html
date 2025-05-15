@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIJE 구독료 계산기</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; }
+    label { display: block; margin-top: 10px; }
+    input[type="number"] { width: 100%; padding: 4px; margin-top: 4px; }
+    .checkbox-group, .radio-group { margin-top: 8px; }
+    .checkbox-group label, .radio-group label { margin-right: 10px; }
+    .result { background: #f9f9f9; padding: 10px; margin-top: 20px; border: 1px solid #ddd; }
+  </style>
+</head>
+<body>
+  <h1>SIJE 구독료 계산기</h1>
+
+  <label>공장 수
+    <input type="number" id="factories" value="0">
+  </label>
+  <label>재봉틀 수
+    <input type="number" id="machines" value="0">
+  </label>
+  <label>사용자 수 (Monolis)
+    <input type="number" id="users" value="0">
+  </label>
+
+  <label>도입 솔루션</label>
+  <div class="checkbox-group">
+    <label><input type="checkbox" id="monolog"> Monolog</label>
+    <label><input type="checkbox" id="moai"> MoAI</label>
+    <label><input type="checkbox" id="monolis"> Monolis</label>
+  </div>
+
+  <label>도입 단계</label>
+  <div class="radio-group">
+    <label><input type="radio" name="stage" value="acquire" checked> Acquire</label>
+    <label><input type="radio" name="stage" value="expand"> Expand</label>
+    <label><input type="radio" name="stage" value="standardize"> Standardize</label>
+  </div>
+
+  <button onclick="calculate()" style="margin-top: 15px; padding: 5px 10px;">계산하기</button>
+
+  <div class="result" id="result"></div>
+
+  <script>
+    function calculate() {
+      const machines = parseInt(document.getElementById('machines').value) || 0;
+      const users = parseInt(document.getElementById('users').value) || 0;
+      const monolog = document.getElementById('monolog').checked;
+      const moai = document.getElementById('moai').checked;
+      const monolis = document.getElementById('monolis').checked;
+      const stage = document.querySelector('input[name="stage"]:checked').value;
+
+      const rate = stage === 'expand' ? 0.2 : (stage === 'standardize' ? 0.7 : 0);
+
+      const monologUnits = (machines * rate) / 120;
+      const monologFee = monolog ? monologUnits * 1100 : 0;
+      const moaiFee = (moai && monolog) ? monologFee * 2 : 0;
+      const monolisFee = monolis ? users * 40 : 0;
+      const totalFee = monologFee + moaiFee + monolisFee;
+
+      const html = `
+        <p>Monolog: $${monologFee.toFixed(2)}</p>
+        <p>MoAI: $${moaiFee.toFixed(2)}</p>
+        <p>Monolis: $${monolisFee.toFixed(2)}</p>
+        <p><strong>총 합계: $${totalFee.toFixed(2)} / 월</strong></p>
+        ${stage === 'acquire' ? '<p>💳 일회성 비용: $15,000</p>' : ''}
+      `;
+
+      document.getElementById('result').innerHTML = html;
+    }
+  </script>
+</body>
+</html>
