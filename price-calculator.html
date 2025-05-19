@@ -101,10 +101,10 @@
         </select>
       </label>
       <label>재봉틀 수
-        <input type="number" id="machines" value="0">
+        <input type="number" id="machines" value="0" min="0">
       </label>
       <label>사용자 수 (Monolis)
-        <input type="number" id="users" value="0">
+        <input type="number" id="users" value="0" min="0">
       </label>
       <button id="simulateBtn">상세 시뮬레이션</button>
       <button id="saveBtn">시뮬레이션 저장</button>
@@ -187,19 +187,46 @@
     const savedSimulationsList = document.getElementById("savedSimulations");
     const compareSelect = document.getElementById("compareSelect");
     
-    // 이벤트 리스너
-    simulateBtn.addEventListener("click", simulateDetails);
+    // 이벤트 리스너 등록
+    simulateBtn.addEventListener("click", function() {
+      const companyName = document.getElementById("companyName").value.trim();
+      const companyType = document.getElementById("companyType").value;
+      const machines = parseInt(document.getElementById("machines").value) || 0;
+      const users = parseInt(document.getElementById("users").value) || 0;
+      
+      if (!companyName || !companyType) {
+        alert("회사명과 회사 구분은 필수 입력 항목입니다.");
+        return;
+      }
+      
+      if (machines < 0 || users < 0) {
+        alert("재봉틀 수와 사용자 수는 0 이상이어야 합니다.");
+        return;
+      }
+      
+      const result = calculateSubscription(companyType, machines, users);
+      currentSimulation = {
+        companyName,
+        companyType,
+        machines,
+        users,
+        result
+      };
+      displayResult(result, companyName);
+    });
+    
     saveBtn.addEventListener("click", saveSimulation);
     
     // 초기화
     updateSavedSimulationsList();
+    updateCompareSelect();
     
     // 통화 형식 (달러)
     function formatCurrency(amount) {
       return amount ? '$' + (amount / EXCHANGE_RATE).toLocaleString('en-US', {maximumFractionDigits: 2}) : '-';
     }
     
-    // 구독료 계산
+    // 구독료 계산 (오류 수정 완료)
     function calculateSubscription(companyType, machines, users) {
       const MONOLOG_UNIT_PRICE = 1200000; // 120대당 월 구독료 (KRW)
       const MONOLIS_PRICE = 50000; // 1인당 월 구독료 (KRW)
@@ -214,51 +241,40 @@
           monolog: 0,
           moai: 0,
           monolis: 0,
-          installation: 0,
+          installation: year === 1 ? INSTALLATION_FEE : 0,
           total: 0
         };
         
-        let applyRatio = 0;
-        if (year === 1) {
-          yearData.installation = INSTALLATION_FEE; // PoC 단계 설치비
-        } else if (year === 2 || year === 3) {
-          applyRatio = 0.2; // Expand 단계 (20%)
-        } else if (year === 4) {
-          applyRatio = 0.7; // Standardize 단계 (70%)
-        }
+        const applyRatio = year === 1 ? 0.05 : (year <= 3 ? 0.2 : 0.7);
+        const appliedMachines = Math.ceil(machines * applyRatio);
+        const appliedUsers = Math.ceil(users * applyRatio);
         
         // 생산 중심
         if (companyType === "production") {
-          if (year >= 2) {
-            const appliedMachines = Math.ceil(machines * applyRatio);
+          if (year >= 1) {
             yearData.monolog = Math.ceil(appliedMachines / 120) * MONOLOG_UNIT_PRICE;
-            yearData.moai = yearData.monolog * 2;
-            
-            if (year >= 3) {
-              const appliedUsers = Math.ceil(users * applyRatio);
-              yearData.monolis = appliedUsers * MONOLIS_PRICE;
-            }
+            if (year >= 2) yearData.moai = yearData.monolog * 2;
+            if (year >= 3) yearData.monolis = appliedUsers * MONOLIS_PRICE;
           }
         } 
         // 소싱 중심
         else if (companyType === "sourcing") {
-          if (year >= 2) {
-            const appliedMachines = Math.ceil(machines * applyRatio);
+          if (year === 1) {
+            yearData.monolis = appliedUsers * MONOLIS_PRICE;
+          } else if (year >= 2) {
             yearData.monolog = Math.ceil(appliedMachines / 120) * MONOLOG_UNIT_PRICE;
             yearData.moai = yearData.monolog * 2;
-            
-            const appliedUsers = Math.ceil(users * applyRatio);
             yearData.monolis = appliedUsers * MONOLIS_PRICE;
           }
         } 
         // 데이터 중심
         else if (companyType === "data") {
-          if (year >= 2) {
-            const appliedMachines = Math.ceil(machines * applyRatio);
+          if (year === 1) {
             const monologBase = Math.ceil(appliedMachines / 120) * MONOLOG_UNIT_PRICE;
             yearData.moai = monologBase * 2;
-            
-            const appliedUsers = Math.ceil(users * applyRatio);
+          } else if (year >= 2) {
+            const monologBase = Math.ceil(appliedMachines / 120) * MONOLOG_UNIT_PRICE;
+            yearData.moai = monologBase * 2;
             yearData.monolis = appliedUsers * MONOLIS_PRICE;
           }
         }
@@ -312,8 +328,14 @@
       );
       
       if (exists) {
-        alert("이미 동일한 회사명과 유형의 시뮬레이션이 저장되어 있습니다.");
-        return;
+        if (!confirm("동일한 회사명과 유형의 시뮬레이션이 이미 존재합니다. 덮어쓰시겠습니까?")) {
+          return;
+        }
+        // 기존 데이터 삭제
+        savedSimulations = savedSimulations.filter(sim => 
+          !(sim.companyName === currentSimulation.companyName && 
+          sim.companyType === currentSimulation.companyType)
+        );
       }
       
       savedSimulations.push(currentSimulation);
@@ -424,7 +446,7 @@
       for (let year = 1; year <= 4; year++) {
         datasets.push({
           label: `${year}년차`,
-          data: simulations.map(sim => sim.result.years[year-1].total / EXCHANGE_RATE), // 달러로 변환
+          data: simulations.map(sim => sim.result.years[year-1].total / EXCHANGE_RATE),
           backgroundColor: getRandomColor(),
           borderColor: getRandomColor(),
           borderWidth: 1
